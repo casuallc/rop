@@ -34,19 +34,20 @@ public class RopBroker {
         this.brokerController = brokerController;
     }
 
-    public void start() {
-        log.info("Start RopBroker");
-        this.zkClient = brokerController.getBrokerService().pulsar().getZkClient();
-        this.zkNodePath = RopZkUtils.BROKERS_PATH + "/" + brokerController.getBrokerAddress();
-        ZookeeperUtils.createEphemeralNodeIfNotExist(zkClient, zkNodePath);
-    }
-
-    public void shutdown() {
-        log.info("Shutdown RopBroker");
-        try {
-            ZookeeperUtils.deleteData(zkClient, zkNodePath);
-        } catch (Throwable t) {
-            log.error("Delete rop broker zk node error", t);
-        }
-    }
+    // TODO 暂时没有用到
+//    public void start() {
+//        log.info("Start RopBroker");
+//        this.zkClient = brokerController.getBrokerService().pulsar().getZkClient();
+//        this.zkNodePath = RopZkUtils.BROKERS_PATH + "/" + brokerController.getBrokerAddress();
+//        ZookeeperUtils.createEphemeralNodeIfNotExist(zkClient, zkNodePath);
+//    }
+//
+//    public void shutdown() {
+//        log.info("Shutdown RopBroker");
+//        try {
+//            ZookeeperUtils.deleteData(zkClient, zkNodePath);
+//        } catch (Throwable t) {
+//            log.error("Delete rop broker zk node error", t);
+//        }
+//    }
 }

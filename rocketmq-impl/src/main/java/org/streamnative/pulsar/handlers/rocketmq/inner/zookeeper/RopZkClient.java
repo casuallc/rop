@@ -37,7 +37,8 @@ public class RopZkClient implements Watcher {
     }
 
     public void start() {
-        this.zooKeeper = brokerController.getBrokerService().pulsar().getZkClient();
+        // TODO 过期 API
+//        this.zooKeeper = brokerController.getBrokerService().pulsar().getZkClient();
 
         // init rop zk node
         ZookeeperUtils.createPersistentNodeIfNotExist(zooKeeper, RopZkUtils.ROP_PATH);

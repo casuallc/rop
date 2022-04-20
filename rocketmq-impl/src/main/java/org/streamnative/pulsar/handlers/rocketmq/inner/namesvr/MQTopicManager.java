@@ -14,8 +14,6 @@
 
 package org.streamnative.pulsar.handlers.rocketmq.inner.namesvr;
 
-import static org.apache.pulsar.broker.web.PulsarWebResource.joinPath;
-
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -49,6 +47,7 @@ import org.apache.pulsar.common.partition.PartitionedTopicMetadata;
 import org.apache.pulsar.common.policies.data.ClusterData;
 import org.apache.pulsar.common.policies.data.RetentionPolicies;
 import org.apache.pulsar.common.policies.data.TenantInfo;
+import org.apache.pulsar.common.policies.path.PolicyPath;
 import org.apache.rocketmq.common.MixAll;
 import org.apache.rocketmq.common.TopicConfig;
 import org.apache.zookeeper.KeeperException;
@@ -119,7 +118,7 @@ public class MQTopicManager extends TopicConfigManager implements NamespaceBundl
 
     public Map<String, List<Integer>> getPulsarTopicRoute(TopicName topicName, String listenerName) {
         try {
-            String topicConfigKey = joinPath(topicName.getNamespace(), topicName.getLocalName());
+            String topicConfigKey = PolicyPath.joinPath(topicName.getNamespace(), topicName.getLocalName());
             if (isTBW12Topic(topicName)) {
                 if (this.sysTopicConfigTable.containsKey(topicConfigKey)) {
                     RopClusterContent clusterContent = zkService.getClusterContent();

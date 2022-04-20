@@ -17,11 +17,11 @@ package org.streamnative.pulsar.handlers.rocketmq.inner.trace;
 import com.alibaba.fastjson.JSON;
 import com.google.common.collect.Maps;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Map;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.skywalking.apm.agent.core.context.ids.GlobalIdGenerator;
-import sun.misc.BASE64Encoder;
 
 /**
  * Trace manager.
@@ -54,7 +54,7 @@ public class TraceManager {
 
     private final TraceStatsReportService reporter;
 
-    private final BASE64Encoder base64Encoder = new BASE64Encoder();
+    private final Base64.Encoder base64Encoder = Base64.getEncoder();
 
     private String buildMessage(Object... args) {
         StringBuilder builder = stringBuilderThreadLocal.get();
@@ -92,7 +92,7 @@ public class TraceManager {
         map.put("msg_key", context.getMsgKey());
         map.put("instance_name", context.getInstanceName());
         map.put("tags", context.getTags());
-        String encodeProperties = base64Encoder.encode(JSON.toJSONString(map).getBytes(StandardCharsets.UTF_8));
+        String encodeProperties = new String(base64Encoder.encode(JSON.toJSONString(map).getBytes(StandardCharsets.UTF_8)));
         encodeProperties = encodeProperties.replaceAll("\r|\n", "");
         String message = buildMessage(GlobalIdGenerator.generate(), 0, 0, context.getPutStartTime(),
                 context.getEndTime(), TYPE_PUT, context.getTopic(), context.getPartitionId(), context.getOffset(),
@@ -111,7 +111,7 @@ public class TraceManager {
 
     public void traceGet(TraceContext context) {
         // encode group with base64
-        String encodeGroup = base64Encoder.encode(context.getGroup().getBytes(StandardCharsets.UTF_8));
+        String encodeGroup = new String(base64Encoder.encode(context.getGroup().getBytes(StandardCharsets.UTF_8)));
         encodeGroup = encodeGroup.replaceAll("\r|\n", "");
         String message = buildMessage(GlobalIdGenerator.generate(), 0, 0, System.currentTimeMillis(),
                 context.getEndTime(), TYPE_GET, context.getTopic(), encodeGroup, context.getPartitionId(),
@@ -121,7 +121,7 @@ public class TraceManager {
 
     public void traceCommit(TraceContext context) {
         // encode group with base64
-        String encodeGroup = base64Encoder.encode(context.getGroup().getBytes(StandardCharsets.UTF_8));
+        String encodeGroup = new String(base64Encoder.encode(context.getGroup().getBytes(StandardCharsets.UTF_8)));
         encodeGroup = encodeGroup.replaceAll("\r|\n", "");
         String message = buildMessage(GlobalIdGenerator.generate(), 0, 0, System.currentTimeMillis(),
                 context.getEndTime(), TYPE_COMMIT, context.getTopic(), encodeGroup, context.getPartitionId(),
@@ -131,7 +131,7 @@ public class TraceManager {
 
     public void traceQlq(TraceContext context) {
         // encode group with base64
-        String encodeGroup = base64Encoder.encode(context.getGroup().getBytes(StandardCharsets.UTF_8));
+        String encodeGroup = new String(base64Encoder.encode(context.getGroup().getBytes(StandardCharsets.UTF_8)));
         encodeGroup = encodeGroup.replaceAll("\r|\n", "");
         String message = buildMessage(GlobalIdGenerator.generate(), 0, 0, System.currentTimeMillis(),
                 context.getEndTime(), TYPE_DLQ, context.getTopic(), encodeGroup, context.getMsgId(),
