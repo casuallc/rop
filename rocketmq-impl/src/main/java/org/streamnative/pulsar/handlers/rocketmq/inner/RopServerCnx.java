@@ -19,7 +19,6 @@ import static org.apache.rocketmq.common.message.MessageConst.PROPERTY_TAGS;
 import static org.apache.rocketmq.common.message.MessageConst.PROPERTY_UNIQ_CLIENT_MESSAGE_ID_KEYIDX;
 import static org.streamnative.pulsar.handlers.rocketmq.utils.CommonUtils.ROP_MESSAGE_ID;
 import static org.streamnative.pulsar.handlers.rocketmq.utils.CommonUtils.SLASH_CHAR;
-
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -220,6 +219,9 @@ public class RopServerCnx extends ChannelInboundHandlerAdapter implements Pulsar
             // Delay Delivery
             if (!isDelayMessage(deliverAtTime)) {
                 pTopic = handleReconsumeDelayedMessage(messageInner);
+            } else {
+                // 定时消息基于延迟消息实现
+                pTopic = handleTimingMessage(messageInner);
             }
         }
 
@@ -276,16 +278,18 @@ public class RopServerCnx extends ChannelInboundHandlerAdapter implements Pulsar
                     }
                 }
             } else {
-                /*
-                 * Use pulsar producer send delay message.
-                 */
                 TIMING_SEND_COUNT.incrementAndGet();
                 long startTimeMs = System.currentTimeMillis();
+                if (log.isDebugEnabled()) {
+                    log.debug("[{}] Publish timing message to topic {}.",
+                            messageInner.getProperty(MessageConst.PROPERTY_REAL_TOPIC), pTopic);
+                }
+
                 final String finalTopic= pTopic;
                 CompletableFuture<MessageId> messageIdFuture = getProducerFromCache(pTopic, producerGroup)
                         .newMessage()
                         .value((body.get(0)))
-                        .deliverAt(deliverAtTime)
+//                        .deliverAt(deliverAtTime)
                         .property(ROP_MESSAGE_ID, msgId)
                         .sendAsync();
                 offsetFuture = messageIdFuture.thenApply((Function<MessageId, PutMessageResult>) messageId -> {
@@ -885,6 +889,22 @@ public class RopServerCnx extends ChannelInboundHandlerAdapter implements Pulsar
             }
             sendTopicName = this.brokerController.getDelayedMessageService()
                     .getDelayedTopicName(messageInner.getDelayTimeLevel());
+
+            MessageAccessor.putProperty(messageInner, MessageConst.PROPERTY_REAL_TOPIC, messageInner.getTopic());
+            MessageAccessor.putProperty(messageInner, MessageConst.PROPERTY_REAL_QUEUE_ID,
+                    String.valueOf(messageInner.getQueueId()));
+            messageInner.setPropertiesString(MessageDecoder.messageProperties2String(messageInner.getProperties()));
+            messageInner.setTopic(sendTopicName);
+        }
+        return sendTopicName;
+    }
+
+    private String handleTimingMessage(MessageExtBrokerInner messageInner) {
+        ClientTopicName clientTopicName = new ClientTopicName(messageInner.getTopic());
+        String sendTopicName = clientTopicName.getPulsarTopicName();
+        if (!clientTopicName.isDLQTopic()) {
+            sendTopicName = this.brokerController.getDelayedMessageService()
+                    .getTimingTopicName();
 
             MessageAccessor.putProperty(messageInner, MessageConst.PROPERTY_REAL_TOPIC, messageInner.getTopic());
             MessageAccessor.putProperty(messageInner, MessageConst.PROPERTY_REAL_QUEUE_ID,
