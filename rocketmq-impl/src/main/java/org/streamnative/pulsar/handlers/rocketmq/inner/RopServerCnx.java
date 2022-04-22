@@ -19,6 +19,7 @@ import static org.apache.rocketmq.common.message.MessageConst.PROPERTY_TAGS;
 import static org.apache.rocketmq.common.message.MessageConst.PROPERTY_UNIQ_CLIENT_MESSAGE_ID_KEYIDX;
 import static org.streamnative.pulsar.handlers.rocketmq.utils.CommonUtils.ROP_MESSAGE_ID;
 import static org.streamnative.pulsar.handlers.rocketmq.utils.CommonUtils.SLASH_CHAR;
+
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -220,7 +221,7 @@ public class RopServerCnx extends ChannelInboundHandlerAdapter implements Pulsar
             if (!isDelayMessage(deliverAtTime)) {
                 pTopic = handleReconsumeDelayedMessage(messageInner);
             } else {
-                // 定时消息基于延迟消息实现
+                // implements by delay message
                 pTopic = handleTimingMessage(messageInner);
             }
         }
@@ -861,7 +862,7 @@ public class RopServerCnx extends ChannelInboundHandlerAdapter implements Pulsar
      * @return deliver at time
      */
     private long getDeliverAtTime(MessageExtBrokerInner messageInner) {
-        return NumberUtils.toLong(messageInner.getProperties().getOrDefault("__STARTDELIVERTIME", "0"));
+        return NumberUtils.toLong(messageInner.getProperties().getOrDefault(CommonUtils.DELIVER_AT_TIME_PROPERTY_NAME, "0"));
     }
 
     private boolean isDelayMessage(long deliverAtTime) {

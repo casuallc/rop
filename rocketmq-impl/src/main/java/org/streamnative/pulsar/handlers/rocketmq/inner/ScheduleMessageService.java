@@ -228,7 +228,7 @@ public class ScheduleMessageService {
                     }
 
                     MessageExt messageExt = RopEntryFormatter.decodePulsarMessage(message);
-                    String deliverTimeStr = messageExt.getProperties().get("__STARTDELIVERTIME");
+                    String deliverTimeStr = messageExt.getProperties().get(CommonUtils.DELIVER_AT_TIME_PROPERTY_NAME);
                     long deliveryTime = deliverTimeStr == null ? computeDeliverTimestamp(this.delayLevel,
                             messageExt.getStoreTimestamp()) : NumberUtils.toLong(deliverTimeStr);
                     long diff = deliveryTime - Instant.now().toEpochMilli();
