@@ -29,7 +29,7 @@ import org.apache.rocketmq.store.MessageExtBrokerInner;
 public class DefaultTransactionalMessageCheckListener extends AbstractTransactionalMessageCheckListener {
 
     public DefaultTransactionalMessageCheckListener() {
-        super();
+        super(null);
     }
 
     @Override

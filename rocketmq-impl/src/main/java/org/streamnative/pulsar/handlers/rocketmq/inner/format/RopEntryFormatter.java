@@ -33,6 +33,7 @@ import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.bookkeeper.mledger.Entry;
 import org.apache.pulsar.client.api.Message;
+import org.apache.pulsar.client.api.MessageId;
 import org.apache.pulsar.client.impl.MessageIdImpl;
 import org.apache.pulsar.client.impl.TopicMessageImpl;
 import org.apache.pulsar.common.api.proto.BrokerEntryMetadata;
@@ -78,6 +79,11 @@ public class RopEntryFormatter implements EntryFormatter<MessageExt> {
         }
     }
 
+    public static MessageExt decodePulsarMessage(byte[] dataBytes, MessageId messageId) {
+        return CommonUtils.decode(ByteBuffer.wrap(dataBytes),
+                (MessageIdImpl) messageId, true, false);
+    }
+
     @Override
     public List<byte[]> encode(MessageExt record, int numMessages) throws RopEncodeException {
         Preconditions.checkNotNull(record);
@@ -91,6 +97,22 @@ public class RopEntryFormatter implements EntryFormatter<MessageExt> {
             }
             byte[] msgBytes = convertRocketmq2Pulsar(tagsCode, mesg);
             return Collections.singletonList(msgBytes);
+        }
+        throw new RopEncodeException("UNKNOWN Message Type");
+    }
+
+    @Override
+    public byte[] encode(MessageExt record) throws RopEncodeException {
+        Preconditions.checkNotNull(record);
+        if (record instanceof MessageExtBrokerInner) {
+            MessageExtBrokerInner mesg = (MessageExtBrokerInner) record;
+            String tags = mesg.getProperty(MessageConst.PROPERTY_TAGS);
+            long tagsCode = 0L;
+            if (tags != null && tags.length() > 0) {
+                tagsCode = MessageExtBrokerInner
+                        .tagsString2tagsCode(MessageExt.parseTopicFilterType(mesg.getSysFlag()), tags);
+            }
+            return convertRocketmq2Pulsar(tagsCode, mesg);
         }
         throw new RopEncodeException("UNKNOWN Message Type");
     }

@@ -20,7 +20,6 @@ import static org.streamnative.pulsar.handlers.rocketmq.utils.CommonUtils.ROP_OW
 import static org.streamnative.pulsar.handlers.rocketmq.utils.CommonUtils.ROP_OWNER_FINISH_TIMESTAMP;
 import static org.streamnative.pulsar.handlers.rocketmq.utils.CommonUtils.ROP_OWNER_RECEIVE_TIMESTAMP;
 import static org.streamnative.pulsar.handlers.rocketmq.utils.CommonUtils.ROP_TRACE_START_TIME;
-
 import com.alibaba.fastjson.JSON;
 import io.netty.channel.ChannelHandlerContext;
 import java.net.InetSocketAddress;
@@ -407,7 +406,7 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
         if (Boolean.parseBoolean(traFlag)
                 && !(msgInner.getReconsumeTimes() > 0
                 && msgInner.getDelayTimeLevel() > 0)) { //For client under version 4.6.1
-            putMessageResult = new org.apache.rocketmq.store.PutMessageResult(PutMessageStatus.MESSAGE_ILLEGAL, null);
+            putMessageResult = this.brokerController.getTransactionalMessageService().prepareMessage(msgInner);
             return handlePutMessageResult(putMessageResult, response, request, msgInner, responseHeader,
                     sendMessageContext, queueIdInt);
         } else {

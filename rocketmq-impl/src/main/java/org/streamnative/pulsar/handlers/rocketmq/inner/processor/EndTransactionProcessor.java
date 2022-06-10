@@ -15,9 +15,9 @@
 package org.streamnative.pulsar.handlers.rocketmq.inner.processor;
 
 import io.netty.channel.ChannelHandlerContext;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.broker.transaction.OperationResult;
 import org.apache.rocketmq.common.TopicFilterType;
-import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.common.message.MessageAccessor;
 import org.apache.rocketmq.common.message.MessageConst;
 import org.apache.rocketmq.common.message.MessageDecoder;
@@ -25,21 +25,20 @@ import org.apache.rocketmq.common.message.MessageExt;
 import org.apache.rocketmq.common.protocol.ResponseCode;
 import org.apache.rocketmq.common.protocol.header.EndTransactionRequestHeader;
 import org.apache.rocketmq.common.sysflag.MessageSysFlag;
-import org.apache.rocketmq.logging.InternalLogger;
-import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.remoting.common.RemotingHelper;
 import org.apache.rocketmq.remoting.exception.RemotingCommandException;
 import org.apache.rocketmq.remoting.netty.NettyRequestProcessor;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 import org.apache.rocketmq.store.MessageExtBrokerInner;
+import org.apache.rocketmq.store.PutMessageResult;
 import org.streamnative.pulsar.handlers.rocketmq.inner.RocketMQBrokerController;
 
 /**
  * End transaction processor.
  */
+@Slf4j
 public class EndTransactionProcessor implements NettyRequestProcessor {
 
-    private static final InternalLogger LOGGER = InternalLoggerFactory.getLogger(LoggerName.TRANSACTION_LOGGER_NAME);
     private final RocketMQBrokerController brokerController;
 
     public EndTransactionProcessor(final RocketMQBrokerController brokerController) {
@@ -52,12 +51,12 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
         final RemotingCommand response = RemotingCommand.createResponseCommand(null);
         final EndTransactionRequestHeader requestHeader =
                 (EndTransactionRequestHeader) request.decodeCommandCustomHeader(EndTransactionRequestHeader.class);
-        LOGGER.debug("Transaction request:{}", requestHeader);
+        log.debug("Transaction request:{}", requestHeader);
 
         if (requestHeader.getFromTransactionCheck()) {
             switch (requestHeader.getCommitOrRollback()) {
                 case MessageSysFlag.TRANSACTION_NOT_TYPE: {
-                    LOGGER.warn("Check producer[{}] transaction state, but it's pending status."
+                    log.warn("Check producer[{}] transaction state, but it's pending status."
                                     + "RequestHeader: {} Remark: {}",
                             RemotingHelper.parseChannelRemoteAddr(ctx.channel()),
                             requestHeader.toString(),
@@ -66,7 +65,7 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
                 }
 
                 case MessageSysFlag.TRANSACTION_COMMIT_TYPE: {
-                    LOGGER.warn("Check producer[{}] transaction state, the producer commit the message."
+                    log.warn("Check producer[{}] transaction state, the producer commit the message."
                                     + "RequestHeader: {} Remark: {}",
                             RemotingHelper.parseChannelRemoteAddr(ctx.channel()),
                             requestHeader.toString(),
@@ -76,7 +75,7 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
                 }
 
                 case MessageSysFlag.TRANSACTION_ROLLBACK_TYPE: {
-                    LOGGER.warn("Check producer[{}] transaction state, the producer rollback the message."
+                    log.warn("Check producer[{}] transaction state, the producer rollback the message."
                                     + "RequestHeader: {} Remark: {}",
                             RemotingHelper.parseChannelRemoteAddr(ctx.channel()),
                             requestHeader.toString(),
@@ -89,7 +88,7 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
         } else {
             switch (requestHeader.getCommitOrRollback()) {
                 case MessageSysFlag.TRANSACTION_NOT_TYPE: {
-                    LOGGER.warn("The producer[{}] end transaction in sending message,  and it's pending status."
+                    log.warn("The producer[{}] end transaction in sending message,  and it's pending status."
                                     + "RequestHeader: {} Remark: {}",
                             RemotingHelper.parseChannelRemoteAddr(ctx.channel()),
                             requestHeader.toString(),
@@ -102,7 +101,7 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
                 }
 
                 case MessageSysFlag.TRANSACTION_ROLLBACK_TYPE: {
-                    LOGGER.warn("The producer[{}] end transaction in sending message, rollback the message."
+                    log.warn("The producer[{}] end transaction in sending message, rollback the message."
                                     + "RequestHeader: {} Remark: {}",
                             RemotingHelper.parseChannelRemoteAddr(ctx.channel()),
                             requestHeader.toString(),
@@ -118,6 +117,8 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
             result = this.brokerController.getTransactionalMessageService().commitMessage(requestHeader);
             if (result.getResponseCode() == ResponseCode.SUCCESS) {
                 RemotingCommand res = checkPrepareMessage(result.getPrepareMessage(), requestHeader);
+                log.info("method {}, checkPrepareMessage result {}", "processRequest", res);
+
                 if (res.getCode() == ResponseCode.SUCCESS) {
                     MessageExtBrokerInner msgInner = endMessageTransaction(result.getPrepareMessage());
                     msgInner.setSysFlag(MessageSysFlag
@@ -157,6 +158,8 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
     }
 
     private RemotingCommand checkPrepareMessage(MessageExt msgExt, EndTransactionRequestHeader requestHeader) {
+        log.info("method {}, data {}", "checkPrepareMessage", msgExt);
+
         final RemotingCommand response = RemotingCommand.createResponseCommand(null);
         if (msgExt != null) {
             final String pgroupRead = msgExt.getProperty(MessageConst.PROPERTY_PRODUCER_GROUP);
@@ -166,17 +169,18 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
                 return response;
             }
 
-            if (msgExt.getQueueOffset() != requestHeader.getTranStateTableOffset()) {
-                response.setCode(ResponseCode.SYSTEM_ERROR);
-                response.setRemark("The transaction state table offset wrong");
-                return response;
-            }
-
-            if (msgExt.getCommitLogOffset() != requestHeader.getCommitLogOffset()) {
-                response.setCode(ResponseCode.SYSTEM_ERROR);
-                response.setRemark("The commit log offset wrong");
-                return response;
-            }
+            // pulsar消息里没有保存queueOffset和commitLogOffset
+//            if (msgExt.getQueueOffset() != requestHeader.getTranStateTableOffset()) {
+//                response.setCode(ResponseCode.SYSTEM_ERROR);
+//                response.setRemark("The transaction state table offset wrong");
+//                return response;
+//            }
+//
+//            if (msgExt.getCommitLogOffset() != requestHeader.getCommitLogOffset()) {
+//                response.setCode(ResponseCode.SYSTEM_ERROR);
+//                response.setRemark("The commit log offset wrong");
+//                return response;
+//            }
         } else {
             response.setCode(ResponseCode.SYSTEM_ERROR);
             response.setRemark("Find prepared transaction message failed");
@@ -213,53 +217,53 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
     }
 
     private RemotingCommand sendFinalMessage(MessageExtBrokerInner msgInner) {
-//        final RemotingCommand response = RemotingCommand.createResponseCommand(null);
-//        final PutMessageResult putMessageResult = null/*this.brokerController.getMessageStore().putMessage(msgInner);
-//        if (putMessageResult != null) {
-//            switch (putMessageResult.getPutMessageStatus()) {
-//                // Success
-//                case PUT_OK:
-//                case FLUSH_DISK_TIMEOUT:
-//                case FLUSH_SLAVE_TIMEOUT:
-//                case SLAVE_NOT_AVAILABLE:
-//                    response.setCode(ResponseCode.SUCCESS);
-//                    response.setRemark(null);
-//                    break;
-//                // Failed
-//                case CREATE_MAPEDFILE_FAILED:
-//                    response.setCode(ResponseCode.SYSTEM_ERROR);
-//                    response.setRemark("Create mapped file failed.");
-//                    break;
-//                case MESSAGE_ILLEGAL:
-//                case PROPERTIES_SIZE_EXCEEDED:
-//                    response.setCode(ResponseCode.MESSAGE_ILLEGAL);
-//                    response.setRemark(
-//                            "The message is illegal, maybe msg body or properties length not matched. "
-//                                    + "msg body length limit 128k, msg properties length limit 32k.");
-//                    break;
-//                case SERVICE_NOT_AVAILABLE:
-//                    response.setCode(ResponseCode.SERVICE_NOT_AVAILABLE);
-//                    response.setRemark("Service not available now.");
-//                    break;
-//                case OS_PAGECACHE_BUSY:
-//                    response.setCode(ResponseCode.SYSTEM_ERROR);
-//                    response.setRemark("OS page cache busy, please try another machine");
-//                    break;
-//                case UNKNOWN_ERROR:
-//                    response.setCode(ResponseCode.SYSTEM_ERROR);
-//                    response.setRemark("UNKNOWN_ERROR");
-//                    break;
-//                default:
-//                    response.setCode(ResponseCode.SYSTEM_ERROR);
-//                    response.setRemark("UNKNOWN_ERROR DEFAULT");
-//                    break;
-//            }
-//            return response;
-//        } else {
-//            response.setCode(ResponseCode.SYSTEM_ERROR);
-//            response.setRemark("store putMessage return null");
-//        }
-//        return response;
-        return null;
+        log.info("method {}, data {}", "sendFinalMessage", msgInner);
+        final RemotingCommand response = RemotingCommand.createResponseCommand(null);
+        final PutMessageResult putMessageResult = this.brokerController.getMessageStore().putRealMessage(msgInner);
+        if (putMessageResult != null) {
+            switch (putMessageResult.getPutMessageStatus()) {
+                // Success
+                case PUT_OK:
+                case FLUSH_DISK_TIMEOUT:
+                case FLUSH_SLAVE_TIMEOUT:
+                case SLAVE_NOT_AVAILABLE:
+                    response.setCode(ResponseCode.SUCCESS);
+                    response.setRemark(null);
+                    break;
+                // Failed
+                case CREATE_MAPEDFILE_FAILED:
+                    response.setCode(ResponseCode.SYSTEM_ERROR);
+                    response.setRemark("Create mapped file failed.");
+                    break;
+                case MESSAGE_ILLEGAL:
+                case PROPERTIES_SIZE_EXCEEDED:
+                    response.setCode(ResponseCode.MESSAGE_ILLEGAL);
+                    response.setRemark(
+                            "The message is illegal, maybe msg body or properties length not matched. "
+                                    + "msg body length limit 128k, msg properties length limit 32k.");
+                    break;
+                case SERVICE_NOT_AVAILABLE:
+                    response.setCode(ResponseCode.SERVICE_NOT_AVAILABLE);
+                    response.setRemark("Service not available now.");
+                    break;
+                case OS_PAGECACHE_BUSY:
+                    response.setCode(ResponseCode.SYSTEM_ERROR);
+                    response.setRemark("OS page cache busy, please try another machine");
+                    break;
+                case UNKNOWN_ERROR:
+                    response.setCode(ResponseCode.SYSTEM_ERROR);
+                    response.setRemark("UNKNOWN_ERROR");
+                    break;
+                default:
+                    response.setCode(ResponseCode.SYSTEM_ERROR);
+                    response.setRemark("UNKNOWN_ERROR DEFAULT");
+                    break;
+            }
+            return response;
+        } else {
+            response.setCode(ResponseCode.SYSTEM_ERROR);
+            response.setRemark("store putMessage return null");
+        }
+        return response;
     }
 }

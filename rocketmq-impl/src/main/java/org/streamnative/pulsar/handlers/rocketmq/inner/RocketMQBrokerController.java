@@ -69,6 +69,11 @@ import org.streamnative.pulsar.handlers.rocketmq.inner.processor.SendMessageProc
 import org.streamnative.pulsar.handlers.rocketmq.inner.producer.ClientTopicName;
 import org.streamnative.pulsar.handlers.rocketmq.inner.producer.ProducerManager;
 import org.streamnative.pulsar.handlers.rocketmq.inner.proxy.RopBrokerProxy;
+import org.streamnative.pulsar.handlers.rocketmq.transaction.TxnMessageBridge;
+import org.streamnative.pulsar.handlers.rocketmq.transaction.TxnMessageCheckListener;
+import org.streamnative.pulsar.handlers.rocketmq.transaction.TxnMessageCheckService;
+import org.streamnative.pulsar.handlers.rocketmq.transaction.TxnMessageServiceImpl;
+import org.streamnative.pulsar.handlers.rocketmq.transaction.TxnMessageStore;
 import org.streamnative.pulsar.handlers.rocketmq.utils.MessageIdUtils;
 
 /**
@@ -125,8 +130,9 @@ public class RocketMQBrokerController {
     private ExecutorService ropBrokerRequestExecutor;
     private BrokerStats brokerStats;
     private String brokerHost;
+    private int brokerPort;
     private String brokerAddress;
-    private TransactionalMessageCheckService transactionalMessageCheckService;
+    private TxnMessageCheckService transactionalMessageCheckService;
     private TransactionalMessageService transactionalMessageService;
     private AbstractTransactionalMessageCheckListener transactionalMessageCheckListener;
     private volatile BrokerService brokerService;
@@ -136,6 +142,8 @@ public class RocketMQBrokerController {
     private static String ropTraceLogDir;
 
     private final Pattern ropNameCheckMatch;
+
+    private final TxnMessageStore messageStore;
 
     public RocketMQBrokerController(final RocketMQServiceConfiguration serverConfig) throws PulsarServerException {
         this.serverConfig = serverConfig;
@@ -202,6 +210,9 @@ public class RocketMQBrokerController {
                             MessageIdUtils.GET_QUEUE_OFFSET_BY_POSITION_METER.oneMinuteRate(),
                             MessageIdUtils.GET_QUEUE_OFFSET_BY_POSITION_METER.count());
                 }, 30, 30, TimeUnit.SECONDS);
+
+        this.brokerPort = RocketMQProtocolHandler.getListenerPort(serverConfig.getRocketmqListeners());
+        this.messageStore = new TxnMessageStore(this);
     }
 
     private static void setRopTraceLogDir(String ropTraceLogDir) {
@@ -491,20 +502,23 @@ public class RocketMQBrokerController {
         this.transactionalMessageService = ServiceProvider
                 .loadClass(ServiceProvider.TRANSACTION_SERVICE_ID, TransactionalMessageService.class);
         if (null == this.transactionalMessageService) {
-            this.transactionalMessageService = new TransactionalMessageServiceImpl(
-                    new TransactionalMessageBridge(this, null));
+            this.transactionalMessageService = new TxnMessageServiceImpl(this, new TxnMessageBridge(this, getMessageStore()));
             log.warn("Load default transaction message hook service: {}",
                     TransactionalMessageServiceImpl.class.getSimpleName());
         }
         this.transactionalMessageCheckListener = ServiceProvider
                 .loadClass(ServiceProvider.TRANSACTION_LISTENER_ID, AbstractTransactionalMessageCheckListener.class);
         if (null == this.transactionalMessageCheckListener) {
-            this.transactionalMessageCheckListener = new DefaultTransactionalMessageCheckListener();
+            this.transactionalMessageCheckListener = new TxnMessageCheckListener(this);
             log.warn("Load default discard message hook service: {}",
                     DefaultTransactionalMessageCheckListener.class.getSimpleName());
         }
         this.transactionalMessageCheckListener.setBrokerController(this);
-        this.transactionalMessageCheckService = new TransactionalMessageCheckService(this);
+        this.transactionalMessageCheckService = new TxnMessageCheckService(this);
+    }
+
+    public TxnMessageStore getMessageStore() {
+        return this.messageStore;
     }
 
     public void registerProcessor() {
@@ -665,6 +679,14 @@ public class RocketMQBrokerController {
         if (this.subscriptionGroupManager != null) {
             this.subscriptionGroupManager.start();
         }
+
+        if (this.messageStore != null) {
+            this.messageStore.start();
+        }
+
+        if (this.transactionalMessageCheckService != null) {
+            this.transactionalMessageCheckService.start();
+        }
         isRunning = true;
     }
 
@@ -675,5 +697,4 @@ public class RocketMQBrokerController {
     public MQTopicManager getTopicConfigManager() {
         return this.ropBrokerProxy.getMqTopicManager();
     }
-
 }

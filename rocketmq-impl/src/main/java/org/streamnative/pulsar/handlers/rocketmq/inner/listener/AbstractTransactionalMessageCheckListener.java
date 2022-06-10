@@ -48,14 +48,12 @@ public abstract class AbstractTransactionalMessageCheckListener {
     protected final Random random = new Random(System.currentTimeMillis());
     private RocketMQBrokerController brokerController;
 
-    public AbstractTransactionalMessageCheckListener() {
-    }
-
     public AbstractTransactionalMessageCheckListener(RocketMQBrokerController brokerController) {
         this.brokerController = brokerController;
     }
 
     public void sendCheckMessage(MessageExt msgExt) throws Exception {
+        log.info("method {}, message {}", "sendCheckMessage", msgExt);
         CheckTransactionStateRequestHeader checkTransactionStateRequestHeader =
                 new CheckTransactionStateRequestHeader();
         checkTransactionStateRequestHeader.setCommitLogOffset(msgExt.getCommitLogOffset());
@@ -70,6 +68,7 @@ public abstract class AbstractTransactionalMessageCheckListener {
         String groupId = msgExt.getProperty(MessageConst.PROPERTY_PRODUCER_GROUP);
         Channel channel = brokerController.getProducerManager().getAvailableChannel(groupId);
         if (channel != null) {
+            log.info("method {}, groupId {}, send message {}", "sendCheckMessage", groupId, msgExt);
             brokerController.getBroker2Client()
                     .checkProducerTransactionState(groupId, channel, checkTransactionStateRequestHeader, msgExt);
         } else {
