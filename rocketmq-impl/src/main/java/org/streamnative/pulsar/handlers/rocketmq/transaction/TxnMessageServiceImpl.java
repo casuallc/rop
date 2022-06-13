@@ -26,23 +26,33 @@ public class TxnMessageServiceImpl implements TransactionalMessageService {
 
     @Override
     public PutMessageResult prepareMessage(MessageExtBrokerInner messageInner) {
-        log.info("method {}, data {}", "prepareMessage", messageInner);
+        if (log.isDebugEnabled()) {
+            log.debug("method {}, data {}", "prepareMessage", messageInner);
+        }
         PutMessageResult result = txnMessageBridge.putHalfMessage(messageInner);
-        log.info("method {}, result {}", "prepareMessage", result);
+        if (log.isDebugEnabled()) {
+            log.debug("method {}, result {}", "prepareMessage", result);
+        }
         return result;
     }
 
     @Override
     public OperationResult commitMessage(EndTransactionRequestHeader requestHeader) {
-        log.info("method {}, data {}", "commitMessage", requestHeader);
+        if (log.isDebugEnabled()) {
+            log.debug("method {}, data {}", "commitMessage", requestHeader);
+        }
         return getHalfMessageByOffset(requestHeader.getCommitLogOffset());
     }
 
     @Override
     public boolean deletePrepareMessage(MessageExt msgExt) {
-        log.info("method {}, data {}", "deletePrepareMessage", msgExt);
+        if (log.isDebugEnabled()) {
+            log.debug("method {}, data {}", "deletePrepareMessage", msgExt);
+        }
         if (this.txnMessageBridge.putOpMessage(msgExt, TransactionalMessageUtil.REMOVETAG)) {
-            log.debug("Transaction op message write successfully. messageId={}, queueId={} msgExt:{}", msgExt.getMsgId(), msgExt.getQueueId(), msgExt);
+            if (log.isDebugEnabled()) {
+                log.debug("Transaction op message write successfully. messageId={}, queueId={} msgExt:{}", msgExt.getMsgId(), msgExt.getQueueId(), msgExt);
+            }
             return true;
         } else {
             log.error("Transaction op message write failed. messageId is {}, queueId is {}", msgExt.getMsgId(), msgExt.getQueueId());
@@ -68,13 +78,19 @@ public class TxnMessageServiceImpl implements TransactionalMessageService {
                     continue;
                 }
 
-                if (System.currentTimeMillis() - txnMessage.getLastCheckTime() < 30000) {
+                if (System.currentTimeMillis() - txnMessage.getLastCheckTime() < 10000) {
+                    continue;
+                }
+
+                if (txnMessage.getLastCheckTime() - txnMessage.getAddTime() > 1000 * 60 * 60 * 12) {
+                    log.info("Message {} add time {}, need not to check again.", txnMessage.getMessageId(), txnMessage.getAddTime());
                     continue;
                 }
 
                 MessageExt messageExt = txnMessageBridge.lookMessageByOffset(txnMessage.getOffset());
                 listener.resolveHalfMsg(messageExt);
                 txnMessage.setLastCheckTime(System.currentTimeMillis());
+                txnMessage.setCheckTimes(txnMessage.getCheckTimes() + 1);
                 sendCount ++;
             }
         } catch (Exception e) {
@@ -82,7 +98,6 @@ public class TxnMessageServiceImpl implements TransactionalMessageService {
         }
         log.info("Transaction check count {}, send count {}, current txn message count {}",
                 checkCount, sendCount, txnMessageBridge.currentTxnMessageCount());
-        log.info("method {}, data {} - {}", "check", transactionTimeout, transactionCheckMax);
     }
 
     private OperationResult getHalfMessageByOffset(long commitLogOffset) {

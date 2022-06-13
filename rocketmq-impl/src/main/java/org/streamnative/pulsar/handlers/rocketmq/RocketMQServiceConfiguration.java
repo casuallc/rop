@@ -250,7 +250,7 @@ public class RocketMQServiceConfiguration extends ServiceConfiguration {
             category = CATEGORY_ROCKETMQ,
             doc = "The interval time of transaction check.\n"
     )
-    private int transactionCheckInterval = 60 * 1000;
+    private int transactionCheckInterval = 30 * 1000;
 
     @FieldContext(
             category = CATEGORY_ROCKETMQ,

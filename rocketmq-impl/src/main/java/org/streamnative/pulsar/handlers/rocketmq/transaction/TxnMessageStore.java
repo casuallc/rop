@@ -84,7 +84,9 @@ public class TxnMessageStore {
 
     public PutMessageResult putMessage(MessageExtBrokerInner messageInner, final boolean opMessage) {
         try {
-            log.info("method {}, opMessage {}, data {}", "putMessage", opMessage, messageInner);
+            if (log.isDebugEnabled()) {
+                log.debug("method {}, opMessage {}, data {}", "putMessage", opMessage, messageInner);
+            }
 
             long startTimeMs = System.currentTimeMillis();
             final String msgId = messageInner.getProperties().get(PROPERTY_UNIQ_CLIENT_MESSAGE_ID_KEYIDX);
@@ -182,7 +184,9 @@ public class TxnMessageStore {
 
     public PutMessageResult putRealMessage(MessageExtBrokerInner messageInner) {
         try {
-            log.info("method {}, data {}", "putRealMessage", messageInner);
+            if (log.isDebugEnabled()) {
+                log.debug("method {}, data {}", "putRealMessage", messageInner);
+            }
             long startTimeMs = System.currentTimeMillis();
             final String msgId = messageInner.getProperties().get(PROPERTY_UNIQ_CLIENT_MESSAGE_ID_KEYIDX);
             final String msgKey = messageInner.getProperties().get(PROPERTY_KEYS);
@@ -193,7 +197,9 @@ public class TxnMessageStore {
             RocketMQTopic rmqTopic = new RocketMQTopic(messageInner.getTopic());
             final String pTopic = rmqTopic.getPartitionName(partitionId);
 
-            log.info("method {}, pulsar topic {}", "putRealMessage", pTopic);
+            if (log.isDebugEnabled()) {
+                log.debug("method {}, pulsar topic {}", "putRealMessage", pTopic);
+            }
 
             CompletableFuture<MessageId> messageIdFuture = getProducerFromCache(pTopic)
                     .newMessage()
@@ -278,8 +284,10 @@ public class TxnMessageStore {
             messageExt.setQueueOffset(txnMessage.getOffset());
             messageExt.setCommitLogOffset(txnMessage.getOffset());
             messageExt.setPreparedTransactionOffset(txnMessage.getOffset());
-            log.info("method {}, pulsarMessageId {}, rocketmqMessage {}",
-                    "lookMessageByOffset", txnMessage.getMessageId(), messageExt);
+            if (log.isDebugEnabled()) {
+                log.debug("method {}, pulsarMessageId {}, rocketmqMessage {}",
+                        "lookMessageByOffset", txnMessage.getMessageId(), messageExt);
+            }
             return messageExt;
         } catch (Exception e) {
             log.error("Can not parse txn message of {}", commitLogOffset, e);

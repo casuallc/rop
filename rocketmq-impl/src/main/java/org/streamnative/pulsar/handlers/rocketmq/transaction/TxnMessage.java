@@ -13,5 +13,7 @@ public class TxnMessage {
     private long offset;
     private int queueId;
 
+    private long addTime = System.currentTimeMillis();
+    private int checkTimes;
     private long lastCheckTime = System.currentTimeMillis();
 }
